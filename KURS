@@ -1,0 +1,63 @@
+Приложение Б. Листинги программного кода
+Листинг 1. Подготовка данных и обучение модели
+```python
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, roc_auc_score
+from xgboost import XGBClassifier
+# Загрузка данных
+data = pd.read_csv('investments_dataset.csv')
+# Preprocessing
+features = data.drop(['Project_ID', 'Success'], axis=1)
+target = data['Success']
+# One-hot encoding для категориальных признаков
+features_encoded = pd.get_dummies(features)
+# Стандартизация числовых признаков
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+numeric_cols = ['ROI', 'Duration_Months', 'Investment_Amount']
+features_scaled = features_encoded.copy()
+features_scaled[numeric_cols] = scaler.fit_transform(features_encoded[numeric_cols])
+# Разделение на обучающую и тестовую выборки
+X_train, X_test, y_train, y_test = train_test_split(
+    features_scaled, target, test_size=0.2, random_state=42
+)
+# Обучение модели XGBoost
+xgb_model = XGBClassifier(random_state=42)
+xgb_model.fit(X_train, y_train)
+# Прогнозирование на тестовой выборке
+y_pred = xgb_model.predict(X_test)
+# Оценка качества модели
+acc = accuracy_score(y_test, y_pred)
+roc_auc = roc_auc_score(y_test, y_pred)
+print(f"Accuracy: {acc:.4f}, ROC-AUC: {roc_auc:.4f}")
+```
+Листинг 2. Пример кода для запуска REST API с использованием Flask
+```python
+from flask import Flask, request, jsonify
+import pickle
+app = Flask(__name__)
+# Загрузка ранее обученной модели
+with open('final_xgb_model.pkl', 'rb') as f:
+    model = pickle.load(f)
+@app.route('/predict', methods=['POST'])
+def predict():
+    if request.method == 'POST':
+        # Извлекаем данные из POST-запроса
+        data = request.get_json()
+        roi = data['ROI']
+        risk_level = data['Risk_Level']
+        duration_months = data['Duration_Months']
+        investment_amount = data['Investment_Amount']
+        
+        # Формируем вектор признаков
+        feature_vector = [[roi, risk_level, duration_months, investment_amount]]
+        
+        # Прогнозируем успешность проекта
+        prediction = model.predict(feature_vector)[0]
+        
+        # Возвращаем результат клиенту
+        return jsonify({'project_id': data['Project_ID'], 'success_prediction': bool(prediction)})
+if __name__ == '__main__':
+    app.run(debug=True)
